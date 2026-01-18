@@ -1,3 +1,4 @@
+// Package cmd provides CLI command definitions for wedevctl.
 package cmd
 
 import (
@@ -22,19 +23,35 @@ func NewRootCommand() *cobra.Command {
 		Use:   "wedevctl",
 		Short: "WeDev resource management CLI tool",
 		Long:  "wedevctl is a CLI tool for managing WeDev virtual networks and WireGuard configurations",
-		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		PersistentPreRunE: func(_cmd *cobra.Command, _args []string) error {
 			// Initialize database
-			homeDir, err := os.UserHomeDir()
-			if err != nil {
-				return fmt.Errorf("failed to get home directory: %w", err)
+			// Check environment variable first
+			dbDir := os.Getenv("WEDEVCTL_DB_PATH")
+
+			// If not set, use default ~/.wedevctl
+			if dbDir == "" {
+				homeDir, err := os.UserHomeDir()
+				if err != nil {
+					return fmt.Errorf("failed to get home directory: %w", err)
+				}
+				dbDir = filepath.Join(homeDir, ".wedevctl")
 			}
 
-			wedevDir := filepath.Join(homeDir, ".wedevctl")
-			if err := os.MkdirAll(wedevDir, 0700); err != nil {
-				return fmt.Errorf("failed to create config directory: %w", err)
+			// Expand relative paths to absolute
+			if !filepath.IsAbs(dbDir) {
+				absDir, err := filepath.Abs(dbDir)
+				if err != nil {
+					return fmt.Errorf("failed to resolve db path: %w", err)
+				}
+				dbDir = absDir
 			}
 
-			dbPath = filepath.Join(wedevDir, "wedevctl.db")
+			// Create directory with secure permissions
+			if err := os.MkdirAll(dbDir, 0o700); err != nil {
+				return fmt.Errorf("failed to create db directory: %w", err)
+			}
+
+			dbPath = filepath.Join(dbDir, "wedevctl.db")
 
 			var sErr error
 			storage, sErr = wedev.NewStorageManager(dbPath)
@@ -43,11 +60,14 @@ func NewRootCommand() *cobra.Command {
 			}
 
 			validator = util.NewDefaultIPValidator()
-			vnManager, _ = wedev.NewVirtualNetworkManager(storage, validator)
-
+			var mnErr error
+			vnManager, mnErr = wedev.NewVirtualNetworkManager(storage, validator)
+			if mnErr != nil {
+				return fmt.Errorf("failed to initialize virtual network manager: %w", mnErr)
+			}
 			return nil
 		},
-		PersistentPostRunE: func(cmd *cobra.Command, args []string) error {
+		PersistentPostRunE: func(_cmd *cobra.Command, _args []string) error {
 			if storage != nil {
 				return storage.Close()
 			}
@@ -170,7 +190,7 @@ func NewVNListCommand() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
 		Short: "List all virtual networks",
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(_cmd *cobra.Command, _args []string) error {
 			networks, err := vnManager.ListVirtualNetworks()
 			if err != nil {
 				return fmt.Errorf("failed to list networks: %w", err)
@@ -276,7 +296,7 @@ func makeServerInfoCommand(networkName string) *cobra.Command {
 		Use:   "info",
 		Short: "Show server information",
 		Args:  cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(_cmd *cobra.Command, _args []string) error {
 			server, err := vnManager.GetServer(networkName)
 			if err != nil {
 				return fmt.Errorf("failed to get server: %w", err)
@@ -300,8 +320,14 @@ func makeServerEditCommand(networkName string) *cobra.Command {
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 
-			publicAddress, _ := cmd.Flags().GetString("public-address")
-			port, _ := cmd.Flags().GetInt("port")
+			publicAddress, err := cmd.Flags().GetString("public-address")
+			if err != nil {
+				return fmt.Errorf("failed to get public-address flag: %w", err)
+			}
+			port, err := cmd.Flags().GetInt("port")
+			if err != nil {
+				return fmt.Errorf("failed to get port flag: %w", err)
+			}
 
 			if publicAddress == "" && port == 0 {
 				return fmt.Errorf("must specify at least --public-address or --port")
@@ -429,7 +455,7 @@ func makeNodeListCommand(networkName string) *cobra.Command {
 		Use:   "list",
 		Short: "List all nodes",
 		Args:  cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(_cmd *cobra.Command, _args []string) error {
 
 			nodes, err := vnManager.ListNodes(networkName)
 			if err != nil {
@@ -453,8 +479,8 @@ func makeNodeListCommand(networkName string) *cobra.Command {
 	}
 }
 
-// makeNodeEditCommand creates the 'node edit' command for a specific network
-func makeNodeEditCommand(networkName string) *cobra.Command {
+// makeNodeEditCommand creates the 'node edit' command for a specific network.
+func makeNodeEditCommand(_ string) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "edit <node-name> --public-address <addr> --port <port> --type <type>",
 		Short: "Edit node information",
@@ -462,9 +488,18 @@ func makeNodeEditCommand(networkName string) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			nodeName := args[0]
 
-			publicAddress, _ := cmd.Flags().GetString("public-address")
-			port, _ := cmd.Flags().GetInt("port")
-			nodeTypeStr, _ := cmd.Flags().GetString("type")
+			publicAddress, err := cmd.Flags().GetString("public-address")
+			if err != nil {
+				return fmt.Errorf("failed to get public-address flag: %w", err)
+			}
+			port, err := cmd.Flags().GetInt("port")
+			if err != nil {
+				return fmt.Errorf("failed to get port flag: %w", err)
+			}
+			nodeTypeStr, err := cmd.Flags().GetString("type")
+			if err != nil {
+				return fmt.Errorf("failed to get type flag: %w", err)
+			}
 
 			node, err := vnManager.GetNode(nodeName)
 			if err != nil {
@@ -480,11 +515,12 @@ func makeNodeEditCommand(networkName string) *cobra.Command {
 			}
 			nodeType := node.Type
 			if nodeTypeStr != "" {
-				if nodeTypeStr == "route" {
+				switch nodeTypeStr {
+				case "route":
 					nodeType = wedev.NodeTypeRoute
-				} else if nodeTypeStr == "peer" {
+				case "peer":
 					nodeType = wedev.NodeTypePeer
-				} else {
+				default:
 					return fmt.Errorf("invalid node type: %s", nodeTypeStr)
 				}
 			}
@@ -509,8 +545,8 @@ func makeNodeEditCommand(networkName string) *cobra.Command {
 	return cmd
 }
 
-// makeNodeDeleteCommand creates the 'node delete' command for a specific network
-func makeNodeDeleteCommand(networkName string) *cobra.Command {
+// makeNodeDeleteCommand creates the 'node delete' command for a specific network.
+func makeNodeDeleteCommand(_ string) *cobra.Command {
 	return &cobra.Command{
 		Use:   "delete <node-name>",
 		Short: "Delete a node",
@@ -558,20 +594,27 @@ func makeConfigGenerateCommand(networkName string) *cobra.Command {
 		Short: "Generate WireGuard configuration files",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			outputDir, _ := cmd.Flags().GetString("output-dir")
-			force, _ := cmd.Flags().GetBool("force")
+			outputDir, err := cmd.Flags().GetString("output-dir")
+			if err != nil {
+				return fmt.Errorf("failed to get output-dir flag: %w", err)
+			}
+			force, err := cmd.Flags().GetBool("force")
+			if err != nil {
+				return fmt.Errorf("failed to get force flag: %w", err)
+			}
 
 			if outputDir == "" {
-				var err error
-				outputDir, err = os.Getwd()
-				if err != nil {
-					return fmt.Errorf("failed to get current directory: %w", err)
+				var getWdErr error
+				outputDir, getWdErr = os.Getwd()
+				if getWdErr != nil {
+					return fmt.Errorf("failed to get current directory: %w", getWdErr)
 				}
 			}
 
 			// Ensure directory exists
-			if err := os.MkdirAll(outputDir, 0755); err != nil {
-				return fmt.Errorf("failed to create output directory: %w", err)
+			mkdirErr := os.MkdirAll(outputDir, 0o700)
+			if mkdirErr != nil {
+				return fmt.Errorf("failed to create output directory: %w", mkdirErr)
 			}
 
 			generator := wedev.NewWireGuardConfigGenerator(storage)
@@ -584,7 +627,7 @@ func makeConfigGenerateCommand(networkName string) *cobra.Command {
 			var existingFiles []string
 			for name := range configs {
 				filePath := filepath.Join(outputDir, name+".conf")
-				if _, err := os.Stat(filePath); err == nil {
+				if _, statErr := os.Stat(filePath); statErr == nil {
 					existingFiles = append(existingFiles, filePath)
 				}
 			}
@@ -604,8 +647,8 @@ func makeConfigGenerateCommand(networkName string) *cobra.Command {
 			// Write files
 			for name, config := range configs {
 				filePath := filepath.Join(outputDir, name+".conf")
-				if err := os.WriteFile(filePath, []byte(config), 0600); err != nil {
-					return fmt.Errorf("failed to write config file %s: %w", filePath, err)
+				if writeErr := os.WriteFile(filePath, []byte(config), 0o600); writeErr != nil {
+					return fmt.Errorf("failed to write config file %s: %w", filePath, writeErr)
 				}
 				fmt.Printf("Generated: %s\n", filePath)
 			}
@@ -683,7 +726,7 @@ func makeConfigHistoryCommand(networkName string) *cobra.Command {
 		Use:   "history",
 		Short: "View configuration history",
 		Args:  cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(_ *cobra.Command, _ []string) error {
 
 			generator := wedev.NewWireGuardConfigGenerator(storage)
 			history, err := generator.GetConfigHistory(networkName)
@@ -707,7 +750,7 @@ func makeConfigHistoryCommand(networkName string) *cobra.Command {
 	}
 }
 
-// Helper function to confirm actions
+// confirmAction prompts user for confirmation.
 func confirmAction(prompt string) bool {
 	// For testing, we may redirect stdin
 	fmt.Printf("%s (y/n): ", prompt)

@@ -1,3 +1,4 @@
+// Package util provides utility functions and validators for wedevctl.
 package util
 
 import (
@@ -23,7 +24,7 @@ type DefaultIPValidator struct{}
 // - Only alphanumeric characters
 // - First character must be a letter
 func (v *DefaultIPValidator) IsValidNetworkName(name string) error {
-	if len(name) == 0 {
+	if name == "" {
 		return fmt.Errorf("network name cannot be empty")
 	}
 	if !regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9]*$`).MatchString(name) {
@@ -46,7 +47,7 @@ func (v *DefaultIPValidator) IsValidCIDR(cidr string) error {
 
 // IsValidPublicAddress validates public address (domain or IP)
 func (v *DefaultIPValidator) IsValidPublicAddress(addr string) error {
-	if len(addr) == 0 {
+	if addr == "" {
 		return fmt.Errorf("public address cannot be empty")
 	}
 	// Try to parse as IP first
@@ -196,14 +197,14 @@ func (p *IPPool) GetAllocatedIPs() map[string]bool {
 }
 
 // GetState returns current state for persistence
-func (p *IPPool) GetState() IPPoolState {
+func (p *IPPool) GetState() *IPPoolState {
 	allocated := make([]string, 0, len(p.allocated))
 	for ip := range p.allocated {
 		if ip != p.serverIP { // Don't include server IP in the state
 			allocated = append(allocated, ip)
 		}
 	}
-	return IPPoolState{
+	return &IPPoolState{
 		NetworkCIDR: p.networkCIDR,
 		ServerIP:    p.serverIP,
 		Allocated:   allocated,
@@ -221,8 +222,8 @@ type IPPoolState struct {
 	NextIndex   int      `json:"next_index"`
 }
 
-// RestoreIPPool creates an IP pool from saved state
-func RestoreIPPool(state IPPoolState) (*IPPool, error) {
+// RestoreIPPool creates an IP pool from saved state.
+func RestoreIPPool(state *IPPoolState) (*IPPool, error) {
 	pool, err := NewIPPool(state.NetworkCIDR)
 	if err != nil {
 		return nil, err
@@ -278,7 +279,7 @@ func GenerateWireGuardKeys() (*WireGuardKeyPair, error) {
 
 // ValidateEndpoint validates endpoint format: address:port
 func ValidateEndpoint(address string, port int) error {
-	if len(address) == 0 {
+	if address == "" {
 		return fmt.Errorf("endpoint address cannot be empty")
 	}
 	if port < 1 || port > 65535 {

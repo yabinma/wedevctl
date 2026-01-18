@@ -1,3 +1,4 @@
+// Package main is the entry point for wedevctl CLI.
 package main
 
 import (

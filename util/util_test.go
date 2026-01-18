@@ -157,9 +157,18 @@ func TestIPPool_ReleaseAndReuse(t *testing.T) {
 	}
 
 	// Allocate some IPs
-	ip1, _ := pool.AllocateNodeIP()
-	ip2, _ := pool.AllocateNodeIP()
-	ip3, _ := pool.AllocateNodeIP()
+	ip1, err := pool.AllocateNodeIP()
+	if err != nil {
+		t.Fatalf("AllocateNodeIP() error = %v", err)
+	}
+	ip2, err := pool.AllocateNodeIP()
+	if err != nil {
+		t.Fatalf("AllocateNodeIP() error = %v", err)
+	}
+	ip3, err := pool.AllocateNodeIP()
+	if err != nil {
+		t.Fatalf("AllocateNodeIP() error = %v", err)
+	}
 
 	// Release one
 	err = pool.ReleaseNodeIP(ip2)
@@ -168,7 +177,10 @@ func TestIPPool_ReleaseAndReuse(t *testing.T) {
 	}
 
 	// Allocate should reuse released IP
-	ip4, _ := pool.AllocateNodeIP()
+	ip4, err := pool.AllocateNodeIP()
+	if err != nil {
+		t.Fatalf("AllocateNodeIP() error = %v", err)
+	}
 	if ip4 != ip2 {
 		t.Errorf("AllocateNodeIP() should reuse released IP %s, got %s", ip2, ip4)
 	}
@@ -197,14 +209,24 @@ func TestIPPool_GetState_RestoreIPPool(t *testing.T) {
 		t.Fatalf("NewIPPool() error = %v", err)
 	}
 
-	ip1, _ := pool.AllocateNodeIP()
-	ip2, _ := pool.AllocateNodeIP()
-	ip3, _ := pool.AllocateNodeIP()
-	_ = ip2
-	_ = ip3
+	ip1, err := pool.AllocateNodeIP()
+	if err != nil {
+		t.Fatalf("AllocateNodeIP() error = %v", err)
+	}
+	_, err = pool.AllocateNodeIP()
+	if err != nil {
+		t.Fatalf("AllocateNodeIP() error = %v", err)
+	}
+	_, err = pool.AllocateNodeIP()
+	if err != nil {
+		t.Fatalf("AllocateNodeIP() error = %v", err)
+	}
 
 	// Release one to create recycled state
-	pool.ReleaseNodeIP(ip1)
+	err = pool.ReleaseNodeIP(ip1)
+	if err != nil {
+		t.Fatalf("ReleaseNodeIP() error = %v", err)
+	}
 
 	// Get state
 	state := pool.GetState()
@@ -221,7 +243,10 @@ func TestIPPool_GetState_RestoreIPPool(t *testing.T) {
 	}
 
 	// Verify recycled IP can be reused
-	ip4, _ := newPool.AllocateNodeIP()
+	ip4, err := newPool.AllocateNodeIP()
+	if err != nil {
+		t.Fatalf("AllocateNodeIP() error = %v", err)
+	}
 	if ip4 != ip1 {
 		t.Errorf("Restored pool should reuse recycled IP %s, got %s", ip1, ip4)
 	}
@@ -244,8 +269,9 @@ func TestGenerateWireGuardKeys(t *testing.T) {
 			}
 			if keys == nil {
 				t.Errorf("GenerateWireGuardKeys() returned nil")
+				return
 			}
-			if len(keys.PrivateKey) == 0 || len(keys.PublicKey) == 0 {
+			if keys.PrivateKey == "" || keys.PublicKey == "" {
 				t.Errorf("GenerateWireGuardKeys() generated empty keys")
 			}
 			// Keys should be base64 encoded
@@ -257,8 +283,14 @@ func TestGenerateWireGuardKeys(t *testing.T) {
 }
 
 func TestGenerateWireGuardKeys_Uniqueness(t *testing.T) {
-	keys1, _ := GenerateWireGuardKeys()
-	keys2, _ := GenerateWireGuardKeys()
+	keys1, err := GenerateWireGuardKeys()
+	if err != nil {
+		t.Fatalf("GenerateWireGuardKeys() error = %v", err)
+	}
+	keys2, err := GenerateWireGuardKeys()
+	if err != nil {
+		t.Fatalf("GenerateWireGuardKeys() error = %v", err)
+	}
 
 	if keys1.PrivateKey == keys2.PrivateKey {
 		t.Errorf("Generated private keys should be unique")

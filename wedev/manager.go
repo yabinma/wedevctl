@@ -1,7 +1,8 @@
+// Package wedev provides virtual network and WireGuard configuration management.
 package wedev
 
 import (
-	"crypto/md5"
+	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"sort"
@@ -26,8 +27,8 @@ func NewVirtualNetworkManager(storage *StorageManager, validator util.IPValidato
 	}, nil
 }
 
-// CreateVirtualNetwork creates a new virtual network
-func (vnm *VirtualNetworkManager) CreateVirtualNetwork(name string, cidr string) (*VirtualNetwork, error) {
+// CreateVirtualNetwork creates a new virtual network.
+func (vnm *VirtualNetworkManager) CreateVirtualNetwork(name, cidr string) (*VirtualNetwork, error) {
 	// Validate input
 	if err := vnm.validator.IsValidNetworkName(name); err != nil {
 		return nil, err
@@ -77,8 +78,8 @@ func (vnm *VirtualNetworkManager) DeleteVirtualNetwork(name string) error {
 	return vnm.storage.DeleteNetwork(name)
 }
 
-// CreateServer creates a new server in the network
-func (vnm *VirtualNetworkManager) CreateServer(networkName string, serverName string, publicAddress string, port int) (*Server, error) {
+// CreateServer creates a new server in the network.
+func (vnm *VirtualNetworkManager) CreateServer(networkName, serverName, publicAddress string, port int) (*Server, error) {
 	// Get network
 	network, err := vnm.storage.GetNetworkByName(networkName)
 	if err != nil {
@@ -86,13 +87,16 @@ func (vnm *VirtualNetworkManager) CreateServer(networkName string, serverName st
 	}
 
 	// Validate input
-	if err := vnm.validator.IsValidPublicAddress(publicAddress); err != nil {
-		return nil, err
+	if valErr := vnm.validator.IsValidPublicAddress(publicAddress); valErr != nil {
+		return nil, valErr
 	}
 
 	// Ensure IP pool exists
 	if _, exists := vnm.ipPools[network.ID]; !exists {
-		ipPool, _ := util.NewIPPool(network.CIDR)
+		ipPool, poolErr := util.NewIPPool(network.CIDR)
+		if poolErr != nil {
+			return nil, poolErr
+		}
 		vnm.ipPools[network.ID] = ipPool
 	}
 
@@ -129,8 +133,8 @@ func (vnm *VirtualNetworkManager) GetServer(networkName string) (*Server, error)
 	return vnm.storage.GetServerByNetworkID(network.ID)
 }
 
-// UpdateServer updates server information
-func (vnm *VirtualNetworkManager) UpdateServer(networkName string, publicAddress string, port int) (*Server, error) {
+// UpdateServer updates server information.
+func (vnm *VirtualNetworkManager) UpdateServer(networkName, publicAddress string, port int) (*Server, error) {
 	// Get network and server
 	network, err := vnm.storage.GetNetworkByName(networkName)
 	if err != nil {
@@ -143,13 +147,13 @@ func (vnm *VirtualNetworkManager) UpdateServer(networkName string, publicAddress
 	}
 
 	// Validate new public address
-	if err := vnm.validator.IsValidPublicAddress(publicAddress); err != nil {
-		return nil, err
+	if valErr := vnm.validator.IsValidPublicAddress(publicAddress); valErr != nil {
+		return nil, valErr
 	}
 
 	// Update in storage
-	if err := vnm.storage.UpdateServer(server.ID, publicAddress, port); err != nil {
-		return nil, err
+	if updateErr := vnm.storage.UpdateServer(server.ID, publicAddress, port); updateErr != nil {
+		return nil, updateErr
 	}
 
 	// Retrieve updated server
@@ -166,8 +170,8 @@ func (vnm *VirtualNetworkManager) DeleteServer(networkName string) error {
 	return vnm.storage.DeleteServer(network.ID)
 }
 
-// CreateNode creates a new node in the network
-func (vnm *VirtualNetworkManager) CreateNode(networkName string, nodeName string, publicAddress string, port int, nodeType NodeType) (*Node, error) {
+// CreateNode creates a new node in the network.
+func (vnm *VirtualNetworkManager) CreateNode(networkName, nodeName, publicAddress string, port int, nodeType NodeType) (*Node, error) {
 	// Get network
 	network, err := vnm.storage.GetNetworkByName(networkName)
 	if err != nil {
@@ -175,13 +179,16 @@ func (vnm *VirtualNetworkManager) CreateNode(networkName string, nodeName string
 	}
 
 	// Validate input
-	if err := vnm.validator.IsValidPublicAddress(publicAddress); err != nil {
-		return nil, err
+	if valErr := vnm.validator.IsValidPublicAddress(publicAddress); valErr != nil {
+		return nil, valErr
 	}
 
 	// Ensure IP pool exists
 	if _, exists := vnm.ipPools[network.ID]; !exists {
-		ipPool, _ := util.NewIPPool(network.CIDR)
+		ipPool, poolErr := util.NewIPPool(network.CIDR)
+		if poolErr != nil {
+			return nil, poolErr
+		}
 		vnm.ipPools[network.ID] = ipPool
 	}
 
@@ -195,7 +202,8 @@ func (vnm *VirtualNetworkManager) CreateNode(networkName string, nodeName string
 	keys, err := util.GenerateWireGuardKeys()
 	if err != nil {
 		// Free the IP if key generation fails
-		vnm.ipPools[network.ID].ReleaseNodeIP(nodeIP)
+		//nolint:errcheck // Acceptable to ignore in error cleanup path
+		_ = vnm.ipPools[network.ID].ReleaseNodeIP(nodeIP)
 		return nil, err
 	}
 
@@ -213,7 +221,8 @@ func (vnm *VirtualNetworkManager) CreateNode(networkName string, nodeName string
 	node, err := vnm.storage.CreateNode(network.ID, nodeName, publicAddress, port, nodeIP, nodeType, keys.PrivateKey, keys.PublicKey)
 	if err != nil {
 		// Free the IP if node creation fails
-		vnm.ipPools[network.ID].ReleaseNodeIP(nodeIP)
+		//nolint:errcheck // Acceptable to ignore in error cleanup path
+		_ = vnm.ipPools[network.ID].ReleaseNodeIP(nodeIP)
 		return nil, err
 	}
 
@@ -235,8 +244,8 @@ func (vnm *VirtualNetworkManager) ListNodes(networkName string) ([]*Node, error)
 	return vnm.storage.ListNodesByNetworkID(network.ID)
 }
 
-// UpdateNode updates node information
-func (vnm *VirtualNetworkManager) UpdateNode(nodeName string, publicAddress string, port int, nodeType NodeType) (*Node, error) {
+// UpdateNode updates node information.
+func (vnm *VirtualNetworkManager) UpdateNode(nodeName, publicAddress string, port int, nodeType NodeType) (*Node, error) {
 	// Get node
 	node, err := vnm.storage.GetNodeByName(nodeName)
 	if err != nil {
@@ -244,8 +253,8 @@ func (vnm *VirtualNetworkManager) UpdateNode(nodeName string, publicAddress stri
 	}
 
 	// Validate new public address
-	if err := vnm.validator.IsValidPublicAddress(publicAddress); err != nil {
-		return nil, err
+	if valErr := vnm.validator.IsValidPublicAddress(publicAddress); valErr != nil {
+		return nil, valErr
 	}
 
 	// Update in storage
@@ -267,7 +276,8 @@ func (vnm *VirtualNetworkManager) DeleteNode(nodeName string) error {
 
 	// Free the IP
 	if _, exists := vnm.ipPools[node.NetworkID]; exists {
-		vnm.ipPools[node.NetworkID].ReleaseNodeIP(node.VirtualIP)
+		//nolint:errcheck // Acceptable to ignore in cleanup path
+		_ = vnm.ipPools[node.NetworkID].ReleaseNodeIP(node.VirtualIP)
 	}
 
 	return vnm.storage.DeleteNode(nodeName)
@@ -285,8 +295,8 @@ func NewWireGuardConfigGenerator(storage *StorageManager) *WireGuardConfigGenera
 	return &WireGuardConfigGenerator{storage: storage}
 }
 
-// GenerateConfigs generates WireGuard configurations for all entities in a network
-func (wcg *WireGuardConfigGenerator) GenerateConfigs(networkName string, storage *StorageManager) (map[string]string, string, error) {
+// GenerateConfigs generates WireGuard configurations for all entities in a network.
+func (wcg *WireGuardConfigGenerator) GenerateConfigs(networkName string, storage *StorageManager) (configs map[string]string, hash string, err error) {
 	// Get network
 	network, err := storage.GetNetworkByName(networkName)
 	if err != nil {
@@ -294,15 +304,15 @@ func (wcg *WireGuardConfigGenerator) GenerateConfigs(networkName string, storage
 	}
 
 	// Get server
-	server, err := storage.GetServerByNetworkID(network.ID)
-	if err != nil {
+	server, sErr := storage.GetServerByNetworkID(network.ID)
+	if sErr != nil {
 		return nil, "", fmt.Errorf("no server found in network")
 	}
 
 	// Get all nodes
-	nodes, err := storage.ListNodesByNetworkID(network.ID)
-	if err != nil {
-		return nil, "", err
+	nodes, nErr := storage.ListNodesByNetworkID(network.ID)
+	if nErr != nil {
+		return nil, "", nErr
 	}
 
 	// Generate server config
@@ -322,13 +332,13 @@ func (wcg *WireGuardConfigGenerator) GenerateConfigs(networkName string, storage
 	}
 
 	// Calculate content hash
-	hash := wcg.calculateConfigHash(allConfigs)
+	contentHash := wcg.calculateConfigHash(allConfigs)
 
-	return allConfigs, hash, nil
+	return allConfigs, contentHash, nil
 }
 
-// generateServerConfig generates the server configuration
-func (wcg *WireGuardConfigGenerator) generateServerConfig(network *VirtualNetwork, server *Server, nodes []*Node) string {
+// generateServerConfig generates the server configuration.
+func (wcg *WireGuardConfigGenerator) generateServerConfig(_ *VirtualNetwork, server *Server, nodes []*Node) string {
 	var config strings.Builder
 
 	config.WriteString("[Interface]\n")
@@ -405,8 +415,8 @@ func (wcg *WireGuardConfigGenerator) calculateConfigHash(configs map[string]stri
 		combined.WriteString(configs[name])
 	}
 
-	// Calculate MD5 hash
-	hash := md5.Sum([]byte(combined.String()))
+	// Calculate SHA256 hash
+	hash := sha256.Sum256([]byte(combined.String()))
 	return hex.EncodeToString(hash[:])
 }
 

@@ -80,6 +80,62 @@ ls -l ./configs/
 # server1.conf  laptop.conf  phone.conf
 ```
 
+## Configuration
+
+### Database Location
+
+By default, wedevctl stores all data in `~/.wedevctl/wedevctl.db`.
+
+To use a custom database location, set the `WEDEVCTL_DB_PATH` environment variable:
+
+```bash
+# Use project-local database
+export WEDEVCTL_DB_PATH=./data
+wedevctl vn add test-net 10.0.0.0/24
+
+# Use system-wide database (requires appropriate permissions)
+export WEDEVCTL_DB_PATH=/var/lib/wedevctl
+wedevctl vn add prod-net 10.0.0.0/24
+
+# Use absolute path
+export WEDEVCTL_DB_PATH=/mnt/shared/wedevctl
+wedevctl vn list
+```
+
+**Notes:**
+- The database file name is always `wedevctl.db`
+- Relative paths are converted to absolute paths based on current working directory
+- Directory permissions are automatically set to `0700` (owner read/write/execute only)
+- The database directory is created automatically if it doesn't exist
+
+### Multi-Environment Setup
+
+You can manage multiple environments by using different database paths:
+
+```bash
+# Development environment
+export WEDEVCTL_DB_PATH=~/.wedevctl/dev
+wedevctl vn add dev-net 10.0.0.0/24
+
+# Production environment
+export WEDEVCTL_DB_PATH=~/.wedevctl/prod
+wedevctl vn add prod-net 10.0.0.0/24
+```
+
+### Shell Configuration
+
+To permanently set a custom database path, add it to your shell configuration:
+
+```bash
+# For bash (~/.bashrc)
+echo 'export WEDEVCTL_DB_PATH=/path/to/your/db' >> ~/.bashrc
+source ~/.bashrc
+
+# For zsh (~/.zshrc)
+echo 'export WEDEVCTL_DB_PATH=/path/to/your/db' >> ~/.zshrc
+source ~/.zshrc
+```
+
 ## User Guide
 
 ### Creating a Virtual Network
@@ -413,20 +469,16 @@ The project uses GitHub Actions for continuous integration. All pull requests to
    - Comprehensive linting (`golangci-lint`)
    - Dependency verification
 
-2. **Secret Scanning**
-   - Gitleaks scan for exposed secrets
-   - Prevents accidental credential commits
-
-3. **Test Suite**
+2. **Test Suite**
    - All unit tests with race detection
-   - Code coverage verification (≥70% required)
+   - Code coverage verification (package-specific requirements)
    - Coverage reporting
 
-4. **Build Verification**
+3. **Build Verification**
    - Binary compilation check
    - Executable verification
 
-5. **Security Scanning**
+4. **Security Scanning**
    - Gosec security analysis
    - Vulnerability detection
 
@@ -434,7 +486,7 @@ The project uses GitHub Actions for continuous integration. All pull requests to
 
 ```yaml
 # Triggered on: Pull requests to main branch
-# Required checks: All must pass (static-analysis, secret-scan, test, build, security-scan)
+# Required checks: All must pass (static-analysis, test, build, security-scan)
 # Merge policy: Only allowed after all checks succeed
 ```
 
@@ -495,14 +547,6 @@ go test ./cmd -v
 - **Configuration Tests**: Generation, versioning, history
 - **Storage Tests**: BoltDB operations, transaction consistency
 
-## Database Location
-
-wedevctl stores data in an embedded BoltDB database:
-
-- **Default Location**: `~/.wedevctl/wedevctl.db`
-- **Format**: BoltDB key-value store
-- **No External Dependencies**: Database file is portable
-
 ## Examples
 
 ### Example 1: Simple Office Network
@@ -547,25 +591,28 @@ wedevctl vn iot node add admin-laptop admin.local 51824 peer
 wedevctl vn iot config generate --output-dir /etc/wireguard --force
 ```
 
-### Example 3: Multi-Environment Setup
+### Example 3: Multi-Environment Setup with Isolated Databases
+
+Manage separate development and production environments with isolated databases:
 
 ```bash
 # Development environment
-wedevctl vn add dev 10.100.0.0/24
-wedevctl vn dev server add dev-server dev.example.com 51820
-wedevctl vn dev node add dev-laptop1 dev1.local 51821 peer
+export WEDEVCTL_DB_PATH=~/.wedevctl/dev
 
-# Staging environment
-wedevctl vn add staging 10.101.0.0/24
-wedevctl vn staging server add staging-server staging.example.com 51820
-wedevctl vn staging node add staging-laptop1 staging1.local 51821 peer
+wedevctl vn add dev-network 10.100.0.0/24
+wedevctl vn dev-network server add dev-server dev.example.com 51820
+wedevctl vn dev-network node add dev-laptop1 dev1.local 51821 peer
+wedevctl vn dev-network config generate --output-dir ./configs/dev
 
-# Production environment
-wedevctl vn add production 10.102.0.0/24
-wedevctl vn production server add prod-server prod.example.com 51820
-wedevctl vn production node add prod-laptop1 prod1.local 51821 peer
+# Production environment (separate database)
+export WEDEVCTL_DB_PATH=~/.wedevctl/prod
 
-# List all networks
+wedevctl vn add prod-network 10.200.0.0/24
+wedevctl vn prod-network server add prod-server prod.example.com 51820
+wedevctl vn prod-network node add prod-laptop1 prod1.local 51821 peer
+wedevctl vn prod-network config generate --output-dir ./configs/prod
+
+# List networks in current environment (production)
 wedevctl vn list
 ```
 

@@ -11,11 +11,21 @@ import (
 func TestCreateVirtualNetwork_Success(t *testing.T) {
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "test.db")
-	storage, _ := NewStorageManager(dbPath)
-	defer storage.Close()
+	storage, err := NewStorageManager(dbPath)
+	if err != nil {
+		t.Fatalf("NewStorageManager() error = %v", err)
+	}
+	defer func() {
+		if err := storage.Close(); err != nil {
+			t.Errorf("storage.Close() error = %v", err)
+		}
+	}()
 
 	validator := util.NewDefaultIPValidator()
-	vnm, _ := NewVirtualNetworkManager(storage, validator)
+	vnm, err := NewVirtualNetworkManager(storage, validator)
+	if err != nil {
+		t.Fatalf("NewVirtualNetworkManager() error = %v", err)
+	}
 
 	net, err := vnm.CreateVirtualNetwork("testnet", "10.0.0.0/24")
 	if err != nil {
@@ -31,11 +41,21 @@ func TestCreateVirtualNetwork_Success(t *testing.T) {
 func TestCreateVirtualNetwork_InvalidName(t *testing.T) {
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "test.db")
-	storage, _ := NewStorageManager(dbPath)
-	defer storage.Close()
+	storage, err := NewStorageManager(dbPath)
+	if err != nil {
+		t.Fatalf("NewStorageManager() error = %v", err)
+	}
+	defer func() {
+		if err := storage.Close(); err != nil {
+			t.Errorf("storage.Close() error = %v", err)
+		}
+	}()
 
 	validator := util.NewDefaultIPValidator()
-	vnm, _ := NewVirtualNetworkManager(storage, validator)
+	vnm, err := NewVirtualNetworkManager(storage, validator)
+	if err != nil {
+		t.Fatalf("NewVirtualNetworkManager() error = %v", err)
+	}
 
 	tests := []struct {
 		name  string
@@ -61,13 +81,25 @@ func TestCreateVirtualNetwork_InvalidName(t *testing.T) {
 func TestCreateServer_Success(t *testing.T) {
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "test.db")
-	storage, _ := NewStorageManager(dbPath)
-	defer storage.Close()
+	storage, err := NewStorageManager(dbPath)
+	if err != nil {
+		t.Fatalf("NewStorageManager() error = %v", err)
+	}
+	defer func() {
+		if err := storage.Close(); err != nil {
+			t.Errorf("storage.Close() error = %v", err)
+		}
+	}()
 
 	validator := util.NewDefaultIPValidator()
-	vnm, _ := NewVirtualNetworkManager(storage, validator)
+	vnm, err := NewVirtualNetworkManager(storage, validator)
+	if err != nil {
+		t.Fatalf("NewVirtualNetworkManager() error = %v", err)
+	}
 
-	vnm.CreateVirtualNetwork("testnet", "10.0.0.0/24")
+	if _, err := vnm.CreateVirtualNetwork("testnet", "10.0.0.0/24"); err != nil {
+		t.Fatalf("CreateVirtualNetwork() error = %v", err)
+	}
 	server, err := vnm.CreateServer("testnet", "server1", "192.168.1.1", 51820)
 
 	if err != nil {
@@ -87,13 +119,25 @@ func TestCreateServer_Success(t *testing.T) {
 func TestCreateServer_DefaultPort(t *testing.T) {
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "test.db")
-	storage, _ := NewStorageManager(dbPath)
-	defer storage.Close()
+	storage, err := NewStorageManager(dbPath)
+	if err != nil {
+		t.Fatalf("NewStorageManager() error = %v", err)
+	}
+	defer func() {
+		if err := storage.Close(); err != nil {
+			t.Errorf("storage.Close() error = %v", err)
+		}
+	}()
 
 	validator := util.NewDefaultIPValidator()
-	vnm, _ := NewVirtualNetworkManager(storage, validator)
+	vnm, err := NewVirtualNetworkManager(storage, validator)
+	if err != nil {
+		t.Fatalf("NewVirtualNetworkManager() error = %v", err)
+	}
 
-	vnm.CreateVirtualNetwork("testnet", "10.0.0.0/24")
+	if _, err := vnm.CreateVirtualNetwork("testnet", "10.0.0.0/24"); err != nil {
+		t.Fatalf("CreateVirtualNetwork() error = %v", err)
+	}
 	server, err := vnm.CreateServer("testnet", "server1", "192.168.1.1", 0)
 
 	if err != nil {
@@ -109,14 +153,28 @@ func TestCreateServer_DefaultPort(t *testing.T) {
 func TestCreateNode_Success(t *testing.T) {
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "test.db")
-	storage, _ := NewStorageManager(dbPath)
-	defer storage.Close()
+	storage, err := NewStorageManager(dbPath)
+	if err != nil {
+		t.Fatalf("NewStorageManager() error = %v", err)
+	}
+	defer func() {
+		if err := storage.Close(); err != nil {
+			t.Errorf("storage.Close() error = %v", err)
+		}
+	}()
 
 	validator := util.NewDefaultIPValidator()
-	vnm, _ := NewVirtualNetworkManager(storage, validator)
+	vnm, err := NewVirtualNetworkManager(storage, validator)
+	if err != nil {
+		t.Fatalf("NewVirtualNetworkManager() error = %v", err)
+	}
 
-	vnm.CreateVirtualNetwork("testnet", "10.0.0.0/24")
-	vnm.CreateServer("testnet", "server1", "192.168.1.1", 51820)
+	if _, err := vnm.CreateVirtualNetwork("testnet", "10.0.0.0/24"); err != nil {
+		t.Fatalf("CreateVirtualNetwork() error = %v", err)
+	}
+	if _, err := vnm.CreateServer("testnet", "server1", "192.168.1.1", 51820); err != nil {
+		t.Fatalf("CreateServer() error = %v", err)
+	}
 	node, err := vnm.CreateNode("testnet", "node1", "192.168.1.2", 51821, NodeTypePeer)
 
 	if err != nil {
@@ -136,14 +194,28 @@ func TestCreateNode_Success(t *testing.T) {
 func TestCreateNode_DefaultType(t *testing.T) {
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "test.db")
-	storage, _ := NewStorageManager(dbPath)
-	defer storage.Close()
+	storage, err := NewStorageManager(dbPath)
+	if err != nil {
+		t.Fatalf("NewStorageManager() error = %v", err)
+	}
+	defer func() {
+		if err := storage.Close(); err != nil {
+			t.Errorf("storage.Close() error = %v", err)
+		}
+	}()
 
 	validator := util.NewDefaultIPValidator()
-	vnm, _ := NewVirtualNetworkManager(storage, validator)
+	vnm, err := NewVirtualNetworkManager(storage, validator)
+	if err != nil {
+		t.Fatalf("NewVirtualNetworkManager() error = %v", err)
+	}
 
-	vnm.CreateVirtualNetwork("testnet", "10.0.0.0/24")
-	vnm.CreateServer("testnet", "server1", "192.168.1.1", 51820)
+	if _, err := vnm.CreateVirtualNetwork("testnet", "10.0.0.0/24"); err != nil {
+		t.Fatalf("CreateVirtualNetwork() error = %v", err)
+	}
+	if _, err := vnm.CreateServer("testnet", "server1", "192.168.1.1", 51820); err != nil {
+		t.Fatalf("CreateServer() error = %v", err)
+	}
 	node, err := vnm.CreateNode("testnet", "node1", "192.168.1.2", 51821, "")
 
 	if err != nil {
@@ -159,26 +231,48 @@ func TestCreateNode_DefaultType(t *testing.T) {
 func TestDeleteNode_IPRecycling(t *testing.T) {
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "test.db")
-	storage, _ := NewStorageManager(dbPath)
-	defer storage.Close()
+	storage, err := NewStorageManager(dbPath)
+	if err != nil {
+		t.Fatalf("NewStorageManager() error = %v", err)
+	}
+	defer func() {
+		if err := storage.Close(); err != nil {
+			t.Errorf("storage.Close() error = %v", err)
+		}
+	}()
 
 	validator := util.NewDefaultIPValidator()
-	vnm, _ := NewVirtualNetworkManager(storage, validator)
+	vnm, err := NewVirtualNetworkManager(storage, validator)
+	if err != nil {
+		t.Fatalf("NewVirtualNetworkManager() error = %v", err)
+	}
 
-	vnm.CreateVirtualNetwork("testnet", "10.0.0.0/24")
-	vnm.CreateServer("testnet", "server1", "192.168.1.1", 51820)
-	node1, _ := vnm.CreateNode("testnet", "node1", "192.168.1.2", 51821, NodeTypePeer)
-	_, _ = vnm.CreateNode("testnet", "node2", "192.168.1.3", 51822, NodeTypePeer)
+	if _, err := vnm.CreateVirtualNetwork("testnet", "10.0.0.0/24"); err != nil {
+		t.Fatalf("CreateVirtualNetwork() error = %v", err)
+	}
+	if _, err := vnm.CreateServer("testnet", "server1", "192.168.1.1", 51820); err != nil {
+		t.Fatalf("CreateServer() error = %v", err)
+	}
+	node1, err := vnm.CreateNode("testnet", "node1", "192.168.1.2", 51821, NodeTypePeer)
+	if err != nil {
+		t.Fatalf("CreateNode(node1) error = %v", err)
+	}
+	if _, err := vnm.CreateNode("testnet", "node2", "192.168.1.3", 51822, NodeTypePeer); err != nil {
+		t.Fatalf("CreateNode(node2) error = %v", err)
+	}
 
 	// Delete node1
-	err := vnm.DeleteNode("node1")
+	err = vnm.DeleteNode("node1")
 	if err != nil {
 		t.Errorf("DeleteNode() error = %v", err)
 		return
 	}
 
 	// Create another node - should reuse node1's IP
-	node3, _ := vnm.CreateNode("testnet", "node3", "192.168.1.4", 51823, NodeTypePeer)
+	node3, err := vnm.CreateNode("testnet", "node3", "192.168.1.4", 51823, NodeTypePeer)
+	if err != nil {
+		t.Fatalf("CreateNode(node3) error = %v", err)
+	}
 
 	if node3.VirtualIP != node1.VirtualIP {
 		t.Errorf("CreateNode() should reuse recycled IP %s, got %s", node1.VirtualIP, node3.VirtualIP)
@@ -188,16 +282,37 @@ func TestDeleteNode_IPRecycling(t *testing.T) {
 func TestGenerateServerConfig(t *testing.T) {
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "test.db")
-	storage, _ := NewStorageManager(dbPath)
-	defer storage.Close()
+	storage, err := NewStorageManager(dbPath)
+	if err != nil {
+		t.Fatalf("NewStorageManager() error = %v", err)
+	}
+	defer func() {
+		if err := storage.Close(); err != nil {
+			t.Errorf("storage.Close() error = %v", err)
+		}
+	}()
 
 	validator := util.NewDefaultIPValidator()
-	vnm, _ := NewVirtualNetworkManager(storage, validator)
+	vnm, err := NewVirtualNetworkManager(storage, validator)
+	if err != nil {
+		t.Fatalf("NewVirtualNetworkManager() error = %v", err)
+	}
 
-	vnm.CreateVirtualNetwork("testnet", "10.0.0.0/24")
-	server, _ := vnm.CreateServer("testnet", "server1", "192.168.1.1", 51820)
-	node1, _ := vnm.CreateNode("testnet", "node1", "192.168.1.2", 51821, NodeTypePeer)
-	node2, _ := vnm.CreateNode("testnet", "node2", "192.168.1.3", 51822, NodeTypeRoute)
+	if _, err := vnm.CreateVirtualNetwork("testnet", "10.0.0.0/24"); err != nil {
+		t.Fatalf("CreateVirtualNetwork() error = %v", err)
+	}
+	server, err := vnm.CreateServer("testnet", "server1", "192.168.1.1", 51820)
+	if err != nil {
+		t.Fatalf("CreateServer() error = %v", err)
+	}
+	node1, err := vnm.CreateNode("testnet", "node1", "192.168.1.2", 51821, NodeTypePeer)
+	if err != nil {
+		t.Fatalf("CreateNode(node1) error = %v", err)
+	}
+	node2, err := vnm.CreateNode("testnet", "node2", "192.168.1.3", 51822, NodeTypeRoute)
+	if err != nil {
+		t.Fatalf("CreateNode(node2) error = %v", err)
+	}
 
 	generator := NewWireGuardConfigGenerator(storage)
 	configs, _, err := generator.GenerateConfigs("testnet", storage)
@@ -231,19 +346,43 @@ func TestGenerateServerConfig(t *testing.T) {
 func TestGeneratePeerNodeConfig(t *testing.T) {
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "test.db")
-	storage, _ := NewStorageManager(dbPath)
-	defer storage.Close()
+	storage, err := NewStorageManager(dbPath)
+	if err != nil {
+		t.Fatalf("NewStorageManager() error = %v", err)
+	}
+	defer func() {
+		if err := storage.Close(); err != nil {
+			t.Errorf("storage.Close() error = %v", err)
+		}
+	}()
 
 	validator := util.NewDefaultIPValidator()
-	vnm, _ := NewVirtualNetworkManager(storage, validator)
+	vnm, err := NewVirtualNetworkManager(storage, validator)
+	if err != nil {
+		t.Fatalf("NewVirtualNetworkManager() error = %v", err)
+	}
 
-	vnm.CreateVirtualNetwork("testnet", "10.0.0.0/24")
-	server, _ := vnm.CreateServer("testnet", "server1", "192.168.1.1", 51820)
-	node1, _ := vnm.CreateNode("testnet", "node1", "192.168.1.2", 51821, NodeTypePeer)
-	node2, _ := vnm.CreateNode("testnet", "node2", "192.168.1.3", 51822, NodeTypePeer)
+	if _, err := vnm.CreateVirtualNetwork("testnet", "10.0.0.0/24"); err != nil {
+		t.Fatalf("CreateVirtualNetwork() error = %v", err)
+	}
+	server, err := vnm.CreateServer("testnet", "server1", "192.168.1.1", 51820)
+	if err != nil {
+		t.Fatalf("CreateServer() error = %v", err)
+	}
+	node1, err := vnm.CreateNode("testnet", "node1", "192.168.1.2", 51821, NodeTypePeer)
+	if err != nil {
+		t.Fatalf("CreateNode(node1) error = %v", err)
+	}
+	node2, err := vnm.CreateNode("testnet", "node2", "192.168.1.3", 51822, NodeTypePeer)
+	if err != nil {
+		t.Fatalf("CreateNode(node2) error = %v", err)
+	}
 
 	generator := NewWireGuardConfigGenerator(storage)
-	configs, _, _ := generator.GenerateConfigs("testnet", storage)
+	configs, _, err := generator.GenerateConfigs("testnet", storage)
+	if err != nil {
+		t.Fatalf("GenerateConfigs() error = %v", err)
+	}
 
 	node1Config := configs[node1.Name]
 
@@ -266,19 +405,43 @@ func TestGeneratePeerNodeConfig(t *testing.T) {
 func TestGenerateRouteNodeConfig(t *testing.T) {
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "test.db")
-	storage, _ := NewStorageManager(dbPath)
-	defer storage.Close()
+	storage, err := NewStorageManager(dbPath)
+	if err != nil {
+		t.Fatalf("NewStorageManager() error = %v", err)
+	}
+	defer func() {
+		if err := storage.Close(); err != nil {
+			t.Errorf("storage.Close() error = %v", err)
+		}
+	}()
 
 	validator := util.NewDefaultIPValidator()
-	vnm, _ := NewVirtualNetworkManager(storage, validator)
+	vnm, err := NewVirtualNetworkManager(storage, validator)
+	if err != nil {
+		t.Fatalf("NewVirtualNetworkManager() error = %v", err)
+	}
 
-	vnm.CreateVirtualNetwork("testnet", "10.0.0.0/24")
-	server, _ := vnm.CreateServer("testnet", "server1", "192.168.1.1", 51820)
-	node1, _ := vnm.CreateNode("testnet", "node1", "192.168.1.2", 51821, NodeTypeRoute)
-	node2, _ := vnm.CreateNode("testnet", "node2", "192.168.1.3", 51822, NodeTypePeer)
+	if _, err := vnm.CreateVirtualNetwork("testnet", "10.0.0.0/24"); err != nil {
+		t.Fatalf("CreateVirtualNetwork() error = %v", err)
+	}
+	server, err := vnm.CreateServer("testnet", "server1", "192.168.1.1", 51820)
+	if err != nil {
+		t.Fatalf("CreateServer() error = %v", err)
+	}
+	node1, err := vnm.CreateNode("testnet", "node1", "192.168.1.2", 51821, NodeTypeRoute)
+	if err != nil {
+		t.Fatalf("CreateNode(node1) error = %v", err)
+	}
+	node2, err := vnm.CreateNode("testnet", "node2", "192.168.1.3", 51822, NodeTypePeer)
+	if err != nil {
+		t.Fatalf("CreateNode(node2) error = %v", err)
+	}
 
 	generator := NewWireGuardConfigGenerator(storage)
-	configs, _, _ := generator.GenerateConfigs("testnet", storage)
+	configs, _, err := generator.GenerateConfigs("testnet", storage)
+	if err != nil {
+		t.Fatalf("GenerateConfigs() error = %v", err)
+	}
 
 	routeNodeConfig := configs[node1.Name]
 
@@ -296,25 +459,45 @@ func TestGenerateRouteNodeConfig(t *testing.T) {
 func TestConfigVersionManagement(t *testing.T) {
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "test.db")
-	storage, _ := NewStorageManager(dbPath)
-	defer storage.Close()
+	storage, err := NewStorageManager(dbPath)
+	if err != nil {
+		t.Fatalf("NewStorageManager() error = %v", err)
+	}
+	defer func() {
+		if err := storage.Close(); err != nil {
+			t.Errorf("storage.Close() error = %v", err)
+		}
+	}()
 
 	validator := util.NewDefaultIPValidator()
-	vnm, _ := NewVirtualNetworkManager(storage, validator)
+	vnm, err := NewVirtualNetworkManager(storage, validator)
+	if err != nil {
+		t.Fatalf("NewVirtualNetworkManager() error = %v", err)
+	}
 
-	vnm.CreateVirtualNetwork("testnet", "10.0.0.0/24")
-	vnm.CreateServer("testnet", "server1", "192.168.1.1", 51820)
+	if _, err := vnm.CreateVirtualNetwork("testnet", "10.0.0.0/24"); err != nil {
+		t.Fatalf("CreateVirtualNetwork() error = %v", err)
+	}
+	if _, err := vnm.CreateServer("testnet", "server1", "192.168.1.1", 51820); err != nil {
+		t.Fatalf("CreateServer() error = %v", err)
+	}
 
 	generator := NewWireGuardConfigGenerator(storage)
 
 	// First save - should create v1
-	config1, created1, _ := generator.SaveConfigVersion("testnet")
+	config1, created1, err := generator.SaveConfigVersion("testnet")
+	if err != nil {
+		t.Fatalf("SaveConfigVersion() error = %v", err)
+	}
 	if !created1 || config1.Version != 1 {
 		t.Errorf("SaveConfigVersion() should create v1")
 	}
 
 	// Second save without changes - should not create new version
-	config2, created2, _ := generator.SaveConfigVersion("testnet")
+	config2, created2, err := generator.SaveConfigVersion("testnet")
+	if err != nil {
+		t.Fatalf("SaveConfigVersion() error = %v", err)
+	}
 	if created2 {
 		t.Errorf("SaveConfigVersion() should not create new version when content unchanged")
 	}
@@ -323,8 +506,13 @@ func TestConfigVersionManagement(t *testing.T) {
 	}
 
 	// Add node - should create v2
-	vnm.CreateNode("testnet", "node1", "192.168.1.2", 51821, NodeTypePeer)
-	config3, created3, _ := generator.SaveConfigVersion("testnet")
+	if _, err := vnm.CreateNode("testnet", "node1", "192.168.1.2", 51821, NodeTypePeer); err != nil {
+		t.Fatalf("CreateNode() error = %v", err)
+	}
+	config3, created3, err := generator.SaveConfigVersion("testnet")
+	if err != nil {
+		t.Fatalf("SaveConfigVersion() error = %v", err)
+	}
 	if !created3 || config3.Version != 2 {
 		t.Errorf("SaveConfigVersion() should create v2 after node added")
 	}
@@ -333,23 +521,47 @@ func TestConfigVersionManagement(t *testing.T) {
 func TestConfigHistory(t *testing.T) {
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "test.db")
-	storage, _ := NewStorageManager(dbPath)
-	defer storage.Close()
+	storage, err := NewStorageManager(dbPath)
+	if err != nil {
+		t.Fatalf("NewStorageManager() error = %v", err)
+	}
+	defer func() {
+		if err := storage.Close(); err != nil {
+			t.Errorf("storage.Close() error = %v", err)
+		}
+	}()
 
 	validator := util.NewDefaultIPValidator()
-	vnm, _ := NewVirtualNetworkManager(storage, validator)
+	vnm, err := NewVirtualNetworkManager(storage, validator)
+	if err != nil {
+		t.Fatalf("NewVirtualNetworkManager() error = %v", err)
+	}
 
-	vnm.CreateVirtualNetwork("testnet", "10.0.0.0/24")
-	vnm.CreateServer("testnet", "server1", "192.168.1.1", 51820)
+	if _, err := vnm.CreateVirtualNetwork("testnet", "10.0.0.0/24"); err != nil {
+		t.Fatalf("CreateVirtualNetwork() error = %v", err)
+	}
+	if _, err := vnm.CreateServer("testnet", "server1", "192.168.1.1", 51820); err != nil {
+		t.Fatalf("CreateServer() error = %v", err)
+	}
 
 	generator := NewWireGuardConfigGenerator(storage)
 
 	// Create multiple versions
-	generator.SaveConfigVersion("testnet")
-	vnm.CreateNode("testnet", "node1", "192.168.1.2", 51821, NodeTypePeer)
-	generator.SaveConfigVersion("testnet")
-	vnm.CreateNode("testnet", "node2", "192.168.1.3", 51822, NodeTypePeer)
-	generator.SaveConfigVersion("testnet")
+	if _, _, err := generator.SaveConfigVersion("testnet"); err != nil {
+		t.Fatalf("SaveConfigVersion() error = %v", err)
+	}
+	if _, err := vnm.CreateNode("testnet", "node1", "192.168.1.2", 51821, NodeTypePeer); err != nil {
+		t.Fatalf("CreateNode(node1) error = %v", err)
+	}
+	if _, _, err := generator.SaveConfigVersion("testnet"); err != nil {
+		t.Fatalf("SaveConfigVersion() error = %v", err)
+	}
+	if _, err := vnm.CreateNode("testnet", "node2", "192.168.1.3", 51822, NodeTypePeer); err != nil {
+		t.Fatalf("CreateNode(node2) error = %v", err)
+	}
+	if _, _, err := generator.SaveConfigVersion("testnet"); err != nil {
+		t.Fatalf("SaveConfigVersion() error = %v", err)
+	}
 
 	// Get history
 	history, err := generator.GetConfigHistory("testnet")
@@ -373,21 +585,41 @@ func TestConfigHistory(t *testing.T) {
 func TestGetSpecificConfigVersion(t *testing.T) {
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "test.db")
-	storage, _ := NewStorageManager(dbPath)
-	defer storage.Close()
+	storage, err := NewStorageManager(dbPath)
+	if err != nil {
+		t.Fatalf("NewStorageManager() error = %v", err)
+	}
+	defer func() {
+		if err := storage.Close(); err != nil {
+			t.Errorf("storage.Close() error = %v", err)
+		}
+	}()
 
 	validator := util.NewDefaultIPValidator()
-	vnm, _ := NewVirtualNetworkManager(storage, validator)
+	vnm, err := NewVirtualNetworkManager(storage, validator)
+	if err != nil {
+		t.Fatalf("NewVirtualNetworkManager() error = %v", err)
+	}
 
-	vnm.CreateVirtualNetwork("testnet", "10.0.0.0/24")
-	vnm.CreateServer("testnet", "server1", "192.168.1.1", 51820)
+	if _, err := vnm.CreateVirtualNetwork("testnet", "10.0.0.0/24"); err != nil {
+		t.Fatalf("CreateVirtualNetwork() error = %v", err)
+	}
+	if _, err := vnm.CreateServer("testnet", "server1", "192.168.1.1", 51820); err != nil {
+		t.Fatalf("CreateServer() error = %v", err)
+	}
 
 	generator := NewWireGuardConfigGenerator(storage)
 
 	// Create multiple versions
-	generator.SaveConfigVersion("testnet")
-	vnm.CreateNode("testnet", "node1", "192.168.1.2", 51821, NodeTypePeer)
-	generator.SaveConfigVersion("testnet")
+	if _, _, err := generator.SaveConfigVersion("testnet"); err != nil {
+		t.Fatalf("SaveConfigVersion() error = %v", err)
+	}
+	if _, err := vnm.CreateNode("testnet", "node1", "192.168.1.2", 51821, NodeTypePeer); err != nil {
+		t.Fatalf("CreateNode() error = %v", err)
+	}
+	if _, _, err := generator.SaveConfigVersion("testnet"); err != nil {
+		t.Fatalf("SaveConfigVersion() error = %v", err)
+	}
 
 	// Get specific version
 	config, err := generator.GetConfig("testnet", 1)
@@ -410,28 +642,53 @@ func TestGetSpecificConfigVersion(t *testing.T) {
 func TestContentHashConsistency(t *testing.T) {
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "test.db")
-	storage, _ := NewStorageManager(dbPath)
-	defer storage.Close()
+	storage, err := NewStorageManager(dbPath)
+	if err != nil {
+		t.Fatalf("NewStorageManager() error = %v", err)
+	}
+	defer func() {
+		if err := storage.Close(); err != nil {
+			t.Errorf("storage.Close() error = %v", err)
+		}
+	}()
 
 	validator := util.NewDefaultIPValidator()
-	vnm, _ := NewVirtualNetworkManager(storage, validator)
+	vnm, err := NewVirtualNetworkManager(storage, validator)
+	if err != nil {
+		t.Fatalf("NewVirtualNetworkManager() error = %v", err)
+	}
 
-	vnm.CreateVirtualNetwork("testnet", "10.0.0.0/24")
-	vnm.CreateServer("testnet", "server1", "192.168.1.1", 51820)
+	if _, err := vnm.CreateVirtualNetwork("testnet", "10.0.0.0/24"); err != nil {
+		t.Fatalf("CreateVirtualNetwork() error = %v", err)
+	}
+	if _, err := vnm.CreateServer("testnet", "server1", "192.168.1.1", 51820); err != nil {
+		t.Fatalf("CreateServer() error = %v", err)
+	}
 
 	generator := NewWireGuardConfigGenerator(storage)
 
 	// Generate configs twice without changes
-	_, hash1, _ := generator.GenerateConfigs("testnet", storage)
-	_, hash2, _ := generator.GenerateConfigs("testnet", storage)
+	_, hash1, err := generator.GenerateConfigs("testnet", storage)
+	if err != nil {
+		t.Fatalf("GenerateConfigs() error = %v", err)
+	}
+	_, hash2, err := generator.GenerateConfigs("testnet", storage)
+	if err != nil {
+		t.Fatalf("GenerateConfigs() error = %v", err)
+	}
 
 	if hash1 != hash2 {
 		t.Errorf("Content hash should be consistent: %s != %s", hash1, hash2)
 	}
 
 	// Add node and regenerate
-	vnm.CreateNode("testnet", "node1", "192.168.1.2", 51821, NodeTypePeer)
-	_, hash3, _ := generator.GenerateConfigs("testnet", storage)
+	if _, err := vnm.CreateNode("testnet", "node1", "192.168.1.2", 51821, NodeTypePeer); err != nil {
+		t.Fatalf("CreateNode() error = %v", err)
+	}
+	_, hash3, err := generator.GenerateConfigs("testnet", storage)
+	if err != nil {
+		t.Fatalf("GenerateConfigs() error = %v", err)
+	}
 
 	if hash1 == hash3 {
 		t.Errorf("Content hash should change when config changes")

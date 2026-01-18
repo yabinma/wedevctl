@@ -40,10 +40,17 @@ func TestGetNetworkByName(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewStorageManager() error = %v", err)
 	}
-	defer sm.Close()
+	defer func() {
+		if err := sm.Close(); err != nil {
+			t.Errorf("sm.Close() error = %v", err)
+		}
+	}()
 
 	// Create a network
-	expected, _ := sm.CreateNetwork("testnet", "10.0.0.0/24")
+	expected, err := sm.CreateNetwork("testnet", "10.0.0.0/24")
+	if err != nil {
+		t.Fatalf("CreateNetwork() error = %v", err)
+	}
 
 	// Retrieve it
 	got, err := sm.GetNetworkByName("testnet")
@@ -69,12 +76,22 @@ func TestListNetworks(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewStorageManager() error = %v", err)
 	}
-	defer sm.Close()
+	defer func() {
+		if err := sm.Close(); err != nil {
+			t.Errorf("sm.Close() error = %v", err)
+		}
+	}()
 
 	// Create multiple networks
-	sm.CreateNetwork("net1", "10.0.0.0/24")
-	sm.CreateNetwork("net2", "10.1.0.0/24")
-	sm.CreateNetwork("net3", "10.2.0.0/24")
+	if _, err := sm.CreateNetwork("net1", "10.0.0.0/24"); err != nil {
+		t.Fatalf("CreateNetwork(net1) error = %v", err)
+	}
+	if _, err := sm.CreateNetwork("net2", "10.1.0.0/24"); err != nil {
+		t.Fatalf("CreateNetwork(net2) error = %v", err)
+	}
+	if _, err := sm.CreateNetwork("net3", "10.2.0.0/24"); err != nil {
+		t.Fatalf("CreateNetwork(net3) error = %v", err)
+	}
 
 	// List them
 	networks, err := sm.ListNetworks()
@@ -94,12 +111,23 @@ func TestDeleteNetwork_CascadeDelete(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewStorageManager() error = %v", err)
 	}
-	defer sm.Close()
+	defer func() {
+		if err := sm.Close(); err != nil {
+			t.Errorf("sm.Close() error = %v", err)
+		}
+	}()
 
 	// Create network with server and node
-	net, _ := sm.CreateNetwork("testnet", "10.0.0.0/24")
-	sm.CreateServer(net.ID, "server1", "192.168.1.1", 51820, "10.0.0.1", "pk1", "pub1")
-	sm.CreateNode(net.ID, "node1", "192.168.1.2", 51821, "10.0.0.2", NodeTypePeer, "pk2", "pub2")
+	net, err := sm.CreateNetwork("testnet", "10.0.0.0/24")
+	if err != nil {
+		t.Fatalf("CreateNetwork() error = %v", err)
+	}
+	if _, err := sm.CreateServer(net.ID, "server1", "192.168.1.1", 51820, "10.0.0.1", "pk1", "pub1"); err != nil {
+		t.Fatalf("CreateServer() error = %v", err)
+	}
+	if _, err := sm.CreateNode(net.ID, "node1", "192.168.1.2", 51821, "10.0.0.2", NodeTypePeer, "pk2", "pub2"); err != nil {
+		t.Fatalf("CreateNode() error = %v", err)
+	}
 
 	// Delete network
 	err = sm.DeleteNetwork("testnet")
@@ -134,9 +162,16 @@ func TestCreateServer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewStorageManager() error = %v", err)
 	}
-	defer sm.Close()
+	defer func() {
+		if err := sm.Close(); err != nil {
+			t.Errorf("sm.Close() error = %v", err)
+		}
+	}()
 
-	net, _ := sm.CreateNetwork("testnet", "10.0.0.0/24")
+	net, err := sm.CreateNetwork("testnet", "10.0.0.0/24")
+	if err != nil {
+		t.Fatalf("CreateNetwork() error = %v", err)
+	}
 
 	tests := []struct {
 		name    string
@@ -165,10 +200,20 @@ func TestGetServerByNetworkID(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewStorageManager() error = %v", err)
 	}
-	defer sm.Close()
+	defer func() {
+		if err := sm.Close(); err != nil {
+			t.Errorf("sm.Close() error = %v", err)
+		}
+	}()
 
-	net, _ := sm.CreateNetwork("testnet", "10.0.0.0/24")
-	expected, _ := sm.CreateServer(net.ID, "server1", "192.168.1.1", 51820, "10.0.0.1", "pk", "pub")
+	net, err := sm.CreateNetwork("testnet", "10.0.0.0/24")
+	if err != nil {
+		t.Fatalf("CreateNetwork() error = %v", err)
+	}
+	expected, err := sm.CreateServer(net.ID, "server1", "192.168.1.1", 51820, "10.0.0.1", "pk", "pub")
+	if err != nil {
+		t.Fatalf("CreateServer() error = %v", err)
+	}
 
 	got, err := sm.GetServerByNetworkID(net.ID)
 	if err != nil {
@@ -180,7 +225,10 @@ func TestGetServerByNetworkID(t *testing.T) {
 	}
 
 	// Try to get server for network with no server
-	net2, _ := sm.CreateNetwork("testnet2", "10.1.0.0/24")
+	net2, err := sm.CreateNetwork("testnet2", "10.1.0.0/24")
+	if err != nil {
+		t.Fatalf("CreateNetwork(testnet2) error = %v", err)
+	}
 	_, err = sm.GetServerByNetworkID(net2.ID)
 	if err == nil {
 		t.Errorf("GetServerByNetworkID() should return error when no server exists")
@@ -231,9 +279,15 @@ func TestListNodesByNetworkID(t *testing.T) {
 	net1, _ := sm.CreateNetwork("net1", "10.0.0.0/24")
 	net2, _ := sm.CreateNetwork("net2", "10.1.0.0/24")
 
-	sm.CreateNode(net1.ID, "node1", "192.168.1.1", 51821, "10.0.0.2", NodeTypePeer, "pk1", "pub1")
-	sm.CreateNode(net1.ID, "node2", "192.168.1.2", 51822, "10.0.0.3", NodeTypePeer, "pk2", "pub2")
-	sm.CreateNode(net2.ID, "node3", "192.168.1.3", 51823, "10.1.0.2", NodeTypePeer, "pk3", "pub3")
+	if _, err := sm.CreateNode(net1.ID, "node1", "192.168.1.1", 51821, "10.0.0.2", NodeTypePeer, "pk1", "pub1"); err != nil {
+		t.Fatalf("CreateNode(node1) error = %v", err)
+	}
+	if _, err := sm.CreateNode(net1.ID, "node2", "192.168.1.2", 51822, "10.0.0.3", NodeTypePeer, "pk2", "pub2"); err != nil {
+		t.Fatalf("CreateNode(node2) error = %v", err)
+	}
+	if _, err := sm.CreateNode(net2.ID, "node3", "192.168.1.3", 51823, "10.1.0.2", NodeTypePeer, "pk3", "pub3"); err != nil {
+		t.Fatalf("CreateNode(node3) error = %v", err)
+	}
 
 	nodes, err := sm.ListNodesByNetworkID(net1.ID)
 	if err != nil {
@@ -314,9 +368,15 @@ func TestGetLatestConfigVersion(t *testing.T) {
 	net, _ := sm.CreateNetwork("testnet", "10.0.0.0/24")
 	configs := map[string]string{"server.conf": "test"}
 
-	sm.SaveConfigVersion(net.ID, "hash1", configs)
-	sm.SaveConfigVersion(net.ID, "hash2", configs)
-	sm.SaveConfigVersion(net.ID, "hash3", configs)
+	if _, err := sm.SaveConfigVersion(net.ID, "hash1", configs); err != nil {
+		t.Fatalf("SaveConfigVersion(hash1) error = %v", err)
+	}
+	if _, err := sm.SaveConfigVersion(net.ID, "hash2", configs); err != nil {
+		t.Fatalf("SaveConfigVersion(hash2) error = %v", err)
+	}
+	if _, err := sm.SaveConfigVersion(net.ID, "hash3", configs); err != nil {
+		t.Fatalf("SaveConfigVersion(hash3) error = %v", err)
+	}
 
 	latest, err := sm.GetLatestConfigVersion(net.ID)
 	if err != nil {
@@ -360,18 +420,24 @@ func TestTransactionConsistency(t *testing.T) {
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "test.db")
 
-	db, err := bbolt.Open(dbPath, 0600, nil)
+	db, err := bbolt.Open(dbPath, 0o600, nil)
 	if err != nil {
 		t.Fatalf("Failed to open database: %v", err)
 	}
 	defer db.Close()
 
 	// Initialize buckets
-	db.Update(func(tx *bbolt.Tx) error {
-		tx.CreateBucketIfNotExists([]byte("items"))
-		tx.CreateBucketIfNotExists([]byte("items_by_name"))
+	if err := db.Update(func(tx *bbolt.Tx) error {
+		if _, err := tx.CreateBucketIfNotExists([]byte("items")); err != nil {
+			return err
+		}
+		if _, err := tx.CreateBucketIfNotExists([]byte("items_by_name")); err != nil {
+			return err
+		}
 		return nil
-	})
+	}); err != nil {
+		t.Fatalf("Failed to initialize buckets: %v", err)
+	}
 
 	// Test successful transaction
 	err = db.Update(func(tx *bbolt.Tx) error {
@@ -389,7 +455,7 @@ func TestTransactionConsistency(t *testing.T) {
 	}
 
 	// Verify both buckets have data
-	db.View(func(tx *bbolt.Tx) error {
+	if err := db.View(func(tx *bbolt.Tx) error {
 		items := tx.Bucket([]byte("items"))
 		itemsByName := tx.Bucket([]byte("items_by_name"))
 
@@ -401,7 +467,9 @@ func TestTransactionConsistency(t *testing.T) {
 		}
 
 		return nil
-	})
+	}); err != nil {
+		t.Errorf("View transaction failed: %v", err)
+	}
 
 	// Test failed transaction (return error)
 	err = db.Update(func(tx *bbolt.Tx) error {
@@ -419,13 +487,15 @@ func TestTransactionConsistency(t *testing.T) {
 	}
 
 	// Verify failed transaction didn't write anything
-	db.View(func(tx *bbolt.Tx) error {
+	if err := db.View(func(tx *bbolt.Tx) error {
 		items := tx.Bucket([]byte("items"))
 		if items.Get([]byte("2")) != nil {
 			t.Errorf("Failed transaction should not persist primary bucket changes")
 		}
 		return nil
-	})
+	}); err != nil {
+		t.Errorf("View transaction failed: %v", err)
+	}
 }
 
 func TestUpdateServer(t *testing.T) {
