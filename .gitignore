@@ -21,6 +21,8 @@ profile.cov
 # vendor/
 target/
 build/
+wedevctl
+design/
 
 # Go workspace file
 go.work

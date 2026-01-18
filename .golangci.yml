@@ -1,0 +1,39 @@
+linters:
+  enable:
+    - gofmt
+    - govet
+    - staticcheck
+    - errcheck
+    - gosimple
+    - unused
+    - ineffassign
+    - typecheck
+    - gosec
+    - gocritic
+    - misspell
+    - revive
+
+linters-settings:
+  govet:
+    check-shadowing: true
+  errcheck:
+    check-type-assertions: true
+    check-blank: true
+  gocritic:
+    enabled-tags:
+      - diagnostic
+      - style
+      - performance
+    disabled-checks:
+      - unnecessaryBlock
+
+run:
+  timeout: 5m
+  tests: true
+  skip-dirs:
+    - vendor
+
+issues:
+  exclude-use-default: false
+  max-issues-per-linter: 0
+  max-same-issues: 0
