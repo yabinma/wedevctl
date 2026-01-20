@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 
@@ -25,6 +26,51 @@ func NewVirtualNetworkManager(storage *StorageManager, validator util.IPValidato
 		ipPools:   make(map[string]*util.IPPool),
 		validator: validator,
 	}, nil
+}
+
+// ensureIPPool ensures an IP pool exists for the network and is properly initialized
+// with all existing IP allocations from the database
+func (vnm *VirtualNetworkManager) ensureIPPool(networkID, networkCIDR string) error {
+	if _, exists := vnm.ipPools[networkID]; exists {
+		return nil
+	}
+
+	// Create new IP pool
+	ipPool, err := util.NewIPPool(networkCIDR)
+	if err != nil {
+		return fmt.Errorf("failed to create IP pool: %w", err)
+	}
+
+	// Load existing server and mark its IP as allocated
+	server, err := vnm.storage.GetServerByNetworkID(networkID)
+	if err == nil && server != nil {
+		// Server IP is already reserved by GetServerIP(), but we need to mark it as allocated
+		if markErr := ipPool.MarkIPAllocated(server.VirtualIP); markErr != nil {
+			return fmt.Errorf("failed to mark server IP as allocated: %w", markErr)
+		}
+	}
+
+	// Load existing nodes and mark their IPs as allocated
+	nodes, err := vnm.storage.ListNodesByNetworkID(networkID)
+	if err != nil {
+		return fmt.Errorf("failed to load existing nodes: %w", err)
+	}
+
+	// Mark all existing node IPs as allocated
+	for _, node := range nodes {
+		if markErr := ipPool.MarkIPAllocated(node.VirtualIP); markErr != nil {
+			// If IP is already allocated, it means we have duplicate IPs in the database
+			// This is a data integrity issue, but we'll log it and continue
+			// rather than failing completely
+			fmt.Fprintf(os.Stderr, "Warning: duplicate IP detected for node %s: %s\n", node.Name, node.VirtualIP)
+		}
+	}
+
+	// Sync nextIndex to ensure new allocations don't conflict with existing ones
+	ipPool.SyncNextIndex()
+
+	vnm.ipPools[networkID] = ipPool
+	return nil
 }
 
 // CreateVirtualNetwork creates a new virtual network.
@@ -91,13 +137,9 @@ func (vnm *VirtualNetworkManager) CreateServer(networkName, serverName, publicAd
 		return nil, valErr
 	}
 
-	// Ensure IP pool exists
-	if _, exists := vnm.ipPools[network.ID]; !exists {
-		ipPool, poolErr := util.NewIPPool(network.CIDR)
-		if poolErr != nil {
-			return nil, poolErr
-		}
-		vnm.ipPools[network.ID] = ipPool
+	// Ensure IP pool exists and is properly initialized
+	if err := vnm.ensureIPPool(network.ID, network.CIDR); err != nil {
+		return nil, err
 	}
 
 	// Server always gets the first usable IP
@@ -178,18 +220,19 @@ func (vnm *VirtualNetworkManager) CreateNode(networkName, nodeName, publicAddres
 		return nil, err
 	}
 
-	// Validate input
-	if valErr := vnm.validator.IsValidPublicAddress(publicAddress); valErr != nil {
-		return nil, valErr
+	// Validate input: peer type requires public address, route type is optional
+	if nodeType == NodeTypePeer && publicAddress == "" {
+		return nil, fmt.Errorf("peer type nodes require a public address")
+	}
+	if publicAddress != "" {
+		if valErr := vnm.validator.IsValidPublicAddress(publicAddress); valErr != nil {
+			return nil, valErr
+		}
 	}
 
-	// Ensure IP pool exists
-	if _, exists := vnm.ipPools[network.ID]; !exists {
-		ipPool, poolErr := util.NewIPPool(network.CIDR)
-		if poolErr != nil {
-			return nil, poolErr
-		}
-		vnm.ipPools[network.ID] = ipPool
+	// Ensure IP pool exists and is properly initialized
+	if err := vnm.ensureIPPool(network.ID, network.CIDR); err != nil {
+		return nil, err
 	}
 
 	// Allocate IP for node
@@ -252,9 +295,14 @@ func (vnm *VirtualNetworkManager) UpdateNode(nodeName, publicAddress string, por
 		return nil, err
 	}
 
-	// Validate new public address
-	if valErr := vnm.validator.IsValidPublicAddress(publicAddress); valErr != nil {
-		return nil, valErr
+	// Validate: peer type requires public address, route type is optional
+	if nodeType == NodeTypePeer && publicAddress == "" {
+		return nil, fmt.Errorf("peer type nodes require a public address")
+	}
+	if publicAddress != "" {
+		if valErr := vnm.validator.IsValidPublicAddress(publicAddress); valErr != nil {
+			return nil, valErr
+		}
 	}
 
 	// Update in storage
@@ -353,7 +401,8 @@ func (wcg *WireGuardConfigGenerator) generateServerConfig(_ *VirtualNetwork, ser
 		config.WriteString("\n[Peer]\n")
 		config.WriteString(fmt.Sprintf("PublicKey = %s\n", node.PublicKey))
 		config.WriteString(fmt.Sprintf("AllowedIPs = %s/32\n", node.VirtualIP))
-		if node.PublicAddress != "" {
+		// Only add Endpoint for peer type nodes (route nodes connect to server, not vice versa)
+		if node.Type == NodeTypePeer && node.PublicAddress != "" {
 			endpoint := util.FormatEndpoint(node.PublicAddress, node.Port)
 			config.WriteString(fmt.Sprintf("Endpoint = %s\n", endpoint))
 		}

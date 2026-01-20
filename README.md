@@ -69,8 +69,8 @@ wedevctl vn add mynetwork 10.0.0.0/24
 wedevctl vn mynetwork server add server1 vpn.example.com 51820
 
 # 3. Add peer nodes (will get IPs 10.0.0.2, 10.0.0.3, etc.)
-wedevctl vn mynetwork node add laptop laptop.local 51821 peer
-wedevctl vn mynetwork node add phone phone.local 51822 peer
+wedevctl vn mynetwork node add laptop peer laptop.local 51821
+wedevctl vn mynetwork node add phone peer phone.local 51822
 
 # 4. Generate WireGuard configuration files
 wedevctl vn mynetwork config generate --output-dir ./configs
@@ -184,26 +184,34 @@ wedevctl vn production server info
 
 Nodes are clients that connect to the network. There are two types:
 
-#### Peer Nodes (Default)
-Peer nodes can communicate with both the server and other peer nodes.
+#### Peer Nodes
+Peer nodes can communicate with both the server and other peer nodes. **Peer nodes require a public address.**
 
 ```bash
-# Add a peer node (type defaults to "peer")
-wedevctl vn <network> node add <node-name> <endpoint> <listen-port> peer
+# Add a peer node (public-address is required)
+wedevctl vn <network> node add <node-name> peer <public-address> [port]
 
 # Examples
-wedevctl vn production node add laptop1 laptop1.local 51821 peer
-wedevctl vn production node add desktop1 desktop1.local 51822 peer
-wedevctl vn production node add phone1 phone1.local 51823 peer
+wedevctl vn production node add laptop1 peer laptop1.local
+wedevctl vn production node add desktop1 peer desktop1.local 51822
+wedevctl vn production node add phone1 peer phone1.local 51823
 ```
 
 #### Route Nodes
-Route nodes only communicate with the server (not with other nodes).
+Route nodes only communicate with the server (not with other nodes). **Route nodes can optionally have a public address.**
 
 ```bash
-# Add a route node
-wedevctl vn production node add iot-device iot.local 51824 route
+# Add a route node without public address (uses WireGuard auto-discovery)
+wedevctl vn production node add iot-device route
+
+# Add a route node with public address
+wedevctl vn production node add router1 route 192.168.1.1 51824
 ```
+
+**Key Differences:**
+- **Peer nodes**: Must have public address, can connect peer-to-peer
+- **Route nodes**: Public address optional, only connects to server
+- In server config: peer nodes have Endpoint, route nodes don't (server waits for connection)
 
 **IP Assignment:**
 - Nodes automatically receive sequential IPs (10.10.0.2, 10.10.0.3, etc.)
@@ -235,9 +243,17 @@ wedevctl vn production config generate --output-dir ./configs --force
 - Ready to use with WireGuard
 
 **Configuration Features:**
-- **Server config**: Includes IP forwarding rules (PostUp/PostDown)
-- **Peer node config**: Includes peers for server + all other peer nodes
-- **Route node config**: Only includes peer for the server
+- **Server config**: 
+  - Includes IP forwarding rules (PostUp/PostDown)
+  - Peer nodes: includes Endpoint (for direct connection)
+  - Route nodes: no Endpoint (server waits for connection from route node)
+- **Peer node config**: Includes peers for server + all other peer nodes with Endpoints
+- **Route node config**: Only includes peer for the server with Endpoint
+
+**Endpoint Behavior:**
+- Server always needs to know peer node addresses (includes Endpoint)
+- Server learns route node addresses dynamically (no Endpoint needed)
+- All nodes know server address (always includes Endpoint in node configs)
 
 **Version Tracking:**
 Configurations are automatically versioned when generated. Each unique configuration gets a new version number with content hash tracking.
@@ -284,15 +300,23 @@ wedevctl vn production server edit --endpoint new.vpn.example.com --listen-port 
 #### Edit Node
 
 ```bash
-# Edit node endpoint
-wedevctl vn production node edit laptop1 --endpoint new-laptop.local
+# Edit node public address
+wedevctl vn production node edit laptop1 --public-address new-laptop.local
 
 # Edit node listen port
-wedevctl vn production node edit laptop1 --listen-port 51830
+wedevctl vn production node edit laptop1 --port 51830
 
-# Edit both
-wedevctl vn production node edit laptop1 --endpoint new-laptop.local --listen-port 51830
+# Change node type (peer requires public address)
+wedevctl vn production node edit laptop1 --type route
+
+# Edit multiple properties
+wedevctl vn production node edit laptop1 --type peer --public-address new-laptop.local --port 51830
 ```
+
+**Validation Rules:**
+- When changing type to `peer`: public address is required
+- When changing type to `route`: public address is optional and can be cleared
+- Peer nodes cannot have their public address cleared (change to route type first)
 
 **After Editing:**
 Regenerate configurations to apply changes:
@@ -406,10 +430,12 @@ vn <network> server delete                            # Delete server
 ### Node Commands
 
 ```bash
-vn <network> node add <name> <endpoint> <port> [type]  # Add node (type: peer|route)
-vn <network> node list                                  # List all nodes
-vn <network> node edit <name> [--endpoint] [--listen-port]  # Edit node
-vn <network> node delete <name>                         # Delete node
+vn <network> node add <name> <type> [public-address] [port]  # Add node (type: peer|route)
+                                                              # peer: public-address required
+                                                              # route: public-address optional
+vn <network> node list                                        # List all nodes
+vn <network> node edit <name> [--type] [--public-address] [--port]  # Edit node
+vn <network> node delete <name>                               # Delete node
 ```
 
 ### Configuration Commands

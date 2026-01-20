@@ -409,27 +409,54 @@ func makeNodeCommand(networkName string) *cobra.Command {
 // makeNodeAddCommand creates the 'node add' command for a specific network
 func makeNodeAddCommand(networkName string) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "add <node-name> <public-address> [port] [type]",
+		Use:   "add <node-name> <type> [public-address] [port]",
 		Short: "Create a new node",
-		Args:  cobra.RangeArgs(2, 4),
+		Long: `Create a new node in the virtual network.
+
+Type can be 'peer' or 'route':
+  - peer: requires public-address, participates in peer-to-peer connections
+  - route: public-address is optional, only connects to server
+
+Examples:
+  # Peer node (public-address required)
+  wedevctl vn mynet node add node1 peer 192.168.1.100
+  wedevctl vn mynet node add node1 peer 192.168.1.100 51821
+
+  # Route node (public-address optional)
+  wedevctl vn mynet node add node2 route
+  wedevctl vn mynet node add node2 route 192.168.1.200 51822`,
+		Args: cobra.RangeArgs(2, 4),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			nodeName := args[0]
-			publicAddress := args[1]
+			nodeTypeStr := args[1]
 
-			port := 51820
-			if len(args) >= 3 {
-				_, err := fmt.Sscanf(args[2], "%d", &port)
-				if err != nil {
-					return fmt.Errorf("invalid port number: %w", err)
-				}
+			// Validate and parse node type
+			var nodeType wedev.NodeType
+			if nodeTypeStr == "route" {
+				nodeType = wedev.NodeTypeRoute
+			} else if nodeTypeStr == "peer" {
+				nodeType = wedev.NodeTypePeer
+			} else {
+				return fmt.Errorf("invalid node type: %s (must be 'peer' or 'route')", nodeTypeStr)
 			}
 
-			nodeType := wedev.NodeTypePeer
+			// Parse public address
+			publicAddress := ""
+			if len(args) >= 3 {
+				publicAddress = args[2]
+			}
+
+			// Validate: peer type requires public address
+			if nodeType == wedev.NodeTypePeer && publicAddress == "" {
+				return fmt.Errorf("peer type nodes require a public address")
+			}
+
+			// Parse port (default 51820)
+			port := 51820
 			if len(args) >= 4 {
-				if args[3] == "route" {
-					nodeType = wedev.NodeTypeRoute
-				} else if args[3] != "peer" {
-					return fmt.Errorf("invalid node type: %s (must be 'peer' or 'route')", args[3])
+				_, err := fmt.Sscanf(args[3], "%d", &port)
+				if err != nil {
+					return fmt.Errorf("invalid port number: %w", err)
 				}
 			}
 
@@ -441,6 +468,9 @@ func makeNodeAddCommand(networkName string) *cobra.Command {
 			fmt.Printf("Node '%s' created successfully\n", node.Name)
 			fmt.Printf("Virtual IP: %s\n", node.VirtualIP)
 			fmt.Printf("Type: %s\n", node.Type)
+			if publicAddress != "" {
+				fmt.Printf("Public Address: %s:%d\n", node.PublicAddress, node.Port)
+			}
 
 			return nil
 		},
@@ -482,9 +512,25 @@ func makeNodeListCommand(networkName string) *cobra.Command {
 // makeNodeEditCommand creates the 'node edit' command for a specific network.
 func makeNodeEditCommand(_ string) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "edit <node-name> --public-address <addr> --port <port> --type <type>",
+		Use:   "edit <node-name> [--type <type>] [--public-address <addr>] [--port <port>]",
 		Short: "Edit node information",
-		Args:  cobra.ExactArgs(1),
+		Long: `Edit node information including type, public address, and port.
+
+Validation rules:
+  - When changing type to 'peer': public-address is required
+  - When changing type to 'route': public-address is optional
+  - Peer type nodes must always have a public-address
+
+Examples:
+  # Change node type to route (can clear public address)
+  wedevctl vn mynet node edit node1 --type route --public-address ""
+
+  # Change node type to peer (must provide public address)
+  wedevctl vn mynet node edit node1 --type peer --public-address 192.168.1.100
+
+  # Update only port
+  wedevctl vn mynet node edit node1 --port 51821`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			nodeName := args[0]
 
@@ -506,23 +552,40 @@ func makeNodeEditCommand(_ string) *cobra.Command {
 				return fmt.Errorf("failed to get node: %w", err)
 			}
 
-			// Use current values if not specified
-			if publicAddress == "" {
-				publicAddress = node.PublicAddress
-			}
-			if port == 0 {
-				port = node.Port
-			}
+			// Determine the final node type
 			nodeType := node.Type
+			typeChanged := false
 			if nodeTypeStr != "" {
+				typeChanged = true
 				switch nodeTypeStr {
 				case "route":
 					nodeType = wedev.NodeTypeRoute
 				case "peer":
 					nodeType = wedev.NodeTypePeer
 				default:
-					return fmt.Errorf("invalid node type: %s", nodeTypeStr)
+					return fmt.Errorf("invalid node type: %s (must be 'peer' or 'route')", nodeTypeStr)
 				}
+			}
+
+			// Determine the final public address
+			publicAddressProvided := cmd.Flags().Changed("public-address")
+			if !publicAddressProvided {
+				publicAddress = node.PublicAddress
+			}
+
+			// Validate type and public address combination
+			if typeChanged && nodeType == wedev.NodeTypePeer && publicAddress == "" {
+				return fmt.Errorf("peer type nodes require a public address (use --public-address)")
+			}
+
+			// If already peer type and trying to clear public address
+			if node.Type == wedev.NodeTypePeer && publicAddressProvided && publicAddress == "" && nodeType == wedev.NodeTypePeer {
+				return fmt.Errorf("cannot clear public address for peer type nodes (change type to route first)")
+			}
+
+			// Use current port if not specified
+			if port == 0 {
+				port = node.Port
 			}
 
 			updated, err := vnManager.UpdateNode(nodeName, publicAddress, port, nodeType)
@@ -531,14 +594,18 @@ func makeNodeEditCommand(_ string) *cobra.Command {
 			}
 
 			fmt.Printf("Node '%s' updated successfully\n", updated.Name)
-			fmt.Printf("Public Address: %s:%d\n", updated.PublicAddress, updated.Port)
 			fmt.Printf("Type: %s\n", updated.Type)
+			if updated.PublicAddress != "" {
+				fmt.Printf("Public Address: %s:%d\n", updated.PublicAddress, updated.Port)
+			} else {
+				fmt.Printf("Public Address: (none)\n")
+			}
 
 			return nil
 		},
 	}
 
-	cmd.Flags().String("public-address", "", "Public address or domain")
+	cmd.Flags().String("public-address", "", "Public address or domain (empty string to clear for route type)")
 	cmd.Flags().Int("port", 0, "Port number")
 	cmd.Flags().String("type", "", "Node type (peer or route)")
 

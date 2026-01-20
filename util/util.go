@@ -173,6 +173,46 @@ func (p *IPPool) AllocateNodeIP() (string, error) {
 	return ip, nil
 }
 
+// MarkIPAllocated marks an existing IP as allocated in the pool.
+// This is used when reconstructing the pool from existing database records.
+func (p *IPPool) MarkIPAllocated(ip string) error {
+	if ip == "" {
+		return fmt.Errorf("IP cannot be empty")
+	}
+	if p.allocated[ip] {
+		return fmt.Errorf("IP %s is already allocated", ip)
+	}
+	p.allocated[ip] = true
+	return nil
+}
+
+// SyncNextIndex updates nextIndex to point past all currently allocated IPs.
+// This should be called after marking existing IPs as allocated when reconstructing the pool.
+func (p *IPPool) SyncNextIndex() {
+	maxIndex := 0
+
+	for allocatedIP := range p.allocated {
+		if allocatedIP == p.serverIP {
+			continue // Server IP is at index 0, skip it
+		}
+
+		// Calculate the index of this IP
+		currentIP := net.ParseIP(p.firstUsable)
+		index := 0
+		for currentIP.String() != allocatedIP && index < p.totalUsable {
+			currentIP = increment(currentIP)
+			index++
+		}
+
+		if index > maxIndex {
+			maxIndex = index
+		}
+	}
+
+	// Set nextIndex to one past the highest allocated index
+	p.nextIndex = maxIndex + 1
+}
+
 // ReleaseNodeIP returns an IP to the pool for recycling
 func (p *IPPool) ReleaseNodeIP(ip string) error {
 	if ip == p.serverIP {
